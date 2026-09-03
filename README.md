@@ -19,6 +19,7 @@ Format Agent Workbench 面向需要反复整理 Word 格式的人：上传格式
 1. 在 GitHub 的 **[Releases](https://github.com/KaguraNanaga/format-agent-workbench/releases/latest)** 页面下载 `format-agent-workbench-windows.zip` 并解压。
 2. 双击 `启动工作台.bat`。首次启动会在当前目录创建独立的 `.venv` 并安装依赖。
 3. 浏览器打开后，先开启“载入演示任务”，不用填写 API Key 即可体验完整交互。
+4. 处理自己的文档时，点击右上角“模型设置”，选择服务并粘贴自己的 API Key。
 
 以后仍然双击 `启动工作台.bat`；需要停止时，在启动窗口中按 `Ctrl+C`，或直接关闭该窗口。
 
@@ -38,17 +39,17 @@ python -m streamlit run app.py
 
 ## 使用自己的文档
 
-真实任务会调用你配置的模型，API Key 只保存在本机：
+真实任务会调用你配置的模型。点击工作台右上角的“模型设置”，然后：
 
-1. 复制 `.env.example` 为 `.env`。
-2. 填写兼容 OpenAI Chat Completions 接口的服务地址、API Key 和模型名。
-3. 重新启动工作台。
+1. 选择 Kimi Code、Kimi API、智谱 GLM、阿里云百炼、Gemini、OpenAI，或其他 OpenAI 兼容接口。
+2. 粘贴 API Key。预设会自动填写接口地址和一个支持图片输入的模型名称，仍可自行修改。
+3. 可先运行“测试多模态连接”，再点击“保存到本机”。测试会发送项目自带的一张示例图，产生一次很小的模型调用；设置保存后立即生效，不必重启。
 
-```dotenv
-LLM_BASE_URL=https://your-provider.example/v1
-LLM_API_KEY=your-api-key
-LLM_MODEL=your-multimodal-model
-```
+API Key 只会写入解压目录中的 `.env`，该文件已被 Git 忽略。高级用户也可以复制 `.env.example` 为 `.env` 后手动编辑。
+
+Temperature 默认使用“自动兼容”，即请求中不发送这个字段，由服务商采用模型默认值。这能避开 Kimi Code、Kimi K3 和部分推理模型因固定温度或不接受该字段而产生的 400 错误；只有服务商明确要求时才需要选择固定数值。
+
+![在工作台内配置多模态模型](docs/images/model-settings.png)
 
 请选择能同时接收文本与图片、并能稳定输出 JSON 的多模态模型。文字规则提取和文档结构识别主要使用文本能力；开启“视觉自检”后，模型还会检查渲染后的页面，因此图片理解能力是完整工作流的必要条件。
 
@@ -117,7 +118,7 @@ python -m pip install pytest
 pytest tests/ -q
 ```
 
-当前公开版本：`0.1.0`。发布前在 Windows 环境通过 42 项自动化测试。
+当前公开版本：`0.2.0`。发布前在 Windows 环境通过自动化测试。
 
 发现安全问题时，请不要公开提交包含真实文档、API Key 或个人信息的 Issue，处理方式见 [SECURITY.md](SECURITY.md)。
 

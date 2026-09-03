@@ -40,7 +40,7 @@ $EnvFile = Join-Path $ProjectRoot ".env"
 $EnvExample = Join-Path $ProjectRoot ".env.example"
 if (-not (Test-Path -LiteralPath $EnvFile)) {
     Copy-Item -LiteralPath $EnvExample -Destination $EnvFile
-    Write-Host "Created .env. The built-in demo needs no API Key; edit this file before using your own natural-language requirements."
+    Write-Host "Created local settings. The demo needs no API Key; use Model Settings in the workbench for your own documents."
 }
 
 Write-Host "Format Agent Workbench is ready."

@@ -3,7 +3,7 @@
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_TIMEOUT
 #   LLM_ALLOW_PUBLIC_IMAGE_UPLOAD（默认 false）
 #   中转站（VibeToken）: https://vibetoken.cn/v1
-# 约定：temperature=0；超时默认 120s；指数退避重试 <=2 次。
+# 约定：temperature 默认省略，由供应商决定；超时默认 120s；指数退避重试 <=2 次。
 #
 # 已知的中转站适配（实测踩出来的坑）：
 #   1. 某些模型不支持 response_format JSON 模式（400）→ 自动去掉重试
@@ -21,6 +21,7 @@ import requests
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_ENV_PATH = os.path.join(_PROJECT_ROOT, ".env")
+_USE_ENV = object()
 
 
 def load_dotenv(path=None, override=False):
@@ -150,27 +151,49 @@ def _upload_image(path, timeout=60):
 
 class LLMClient:
     def __init__(self, base_url=None, api_key=None, model=None,
-                 timeout=None, max_retries=2, on_event=None):
+                 timeout=None, max_retries=2, on_event=None,
+                 temperature=_USE_ENV, max_tokens=None,
+                 allow_public_image_upload=None):
         self.base_url = (base_url or os.environ.get("LLM_BASE_URL") or "").rstrip("/")
         self.api_key = api_key or os.environ.get("LLM_API_KEY") or ""
         self.model = model or os.environ.get("LLM_MODEL") or ""
         self.timeout = timeout if timeout is not None else int(
             os.environ.get("LLM_TIMEOUT", "120"))
-        # 某些端点的模型（如 kimi coding）只允许 temperature=1，用环境变量适配。
-        raw_temperature = os.environ.get("LLM_TEMPERATURE", "0").strip()
+        # Kimi、OpenAI 推理模型等可能拒绝显式 temperature。auto/空值表示不发送。
+        raw_temperature = (
+            os.environ.get("LLM_TEMPERATURE", "auto")
+            if temperature is _USE_ENV else temperature
+        )
+        normalized_temperature = str(
+            "auto" if raw_temperature is None else raw_temperature
+        ).strip().lower()
+        if normalized_temperature in {"", "auto", "default", "omit", "none"}:
+            self.temperature = None
+        else:
+            try:
+                self.temperature = float(normalized_temperature)
+            except ValueError:
+                raise LLMError(
+                    "LLM_TEMPERATURE 必须是 auto 或数字，"
+                    f"当前值为 {raw_temperature!r}"
+                )
+            if not 0 <= self.temperature <= 2:
+                raise LLMError("LLM_TEMPERATURE 必须在 0 到 2 之间")
+        raw_max_tokens = (
+            str(max_tokens) if max_tokens is not None
+            else os.environ.get("LLM_MAX_TOKENS", "4096").strip()
+        )
         try:
-            self.temperature = float(raw_temperature)
-        except ValueError:
-            raise LLMError(f"LLM_TEMPERATURE 必须是数字，当前值为 {raw_temperature!r}")
-        max_tokens = os.environ.get("LLM_MAX_TOKENS", "4096").strip()
-        try:
-            self.max_tokens = max(256, int(max_tokens))
+            self.max_tokens = max(256, int(raw_max_tokens))
         except ValueError:
             self.max_tokens = 4096
-        self.allow_public_image_upload = (
-            os.environ.get("LLM_ALLOW_PUBLIC_IMAGE_UPLOAD", "false").strip().lower()
-            in {"1", "true", "yes", "on"}
-        )
+        if allow_public_image_upload is None:
+            self.allow_public_image_upload = (
+                os.environ.get("LLM_ALLOW_PUBLIC_IMAGE_UPLOAD", "false").strip().lower()
+                in {"1", "true", "yes", "on"}
+            )
+        else:
+            self.allow_public_image_upload = bool(allow_public_image_upload)
         self.max_retries = max_retries
         self.on_event = on_event or (lambda msg: None)
         self.last_response_meta = {}
@@ -260,9 +283,10 @@ class LLMClient:
         body = {
             "model": model or self.model,
             "messages": messages,
-            "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
+        if self.temperature is not None:
+            body["temperature"] = self.temperature
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         resp = requests.post(url, headers=headers, json=body, timeout=self.timeout)
@@ -276,9 +300,9 @@ class LLMClient:
             if "max_tokens" in details and "max_tokens" in body:
                 body.pop("max_tokens", None)
                 changed = True
-            # 模型强制 temperature=1 时，按错误提示自适应一次。
-            if "temperature" in details and "only 1 is allowed" in details:
-                body["temperature"] = 1
+            # 固定温度或不支持温度的模型：移除参数，交给供应商默认值。
+            if "temperature" in details and "temperature" in body:
+                body.pop("temperature", None)
                 changed = True
             if changed:
                 resp = requests.post(url, headers=headers, json=body, timeout=self.timeout)

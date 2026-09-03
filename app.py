@@ -17,6 +17,16 @@ import streamlit as st
 from core.agent import Agent
 from core.history import list_runs, save_run
 from core.llm import load_dotenv
+from core.llm import LLMClient
+from core.model_settings import (
+    PROVIDER_PRESETS,
+    detect_provider,
+    get_provider_preset,
+    normalize_temperature,
+    save_model_settings,
+    temperature_value,
+    validate_model_settings,
+)
 from core.render import renderer_status as _renderer_status
 from core.schema import validate_spec
 
@@ -139,8 +149,23 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .st-key-topbar [data-testid="stColumn"]:first-child {
     flex: 1 1 auto !important; min-width: 0 !important; width: auto !important;
 }
+.st-key-topbar [data-testid="stColumn"]:nth-child(2) {
+    flex: 0 0 116px !important; min-width: 116px !important; width: 116px !important;
+}
 .st-key-topbar [data-testid="stColumn"]:last-child {
     flex: 0 0 42px !important; min-width: 42px !important; width: 42px !important;
+}
+.st-key-model_settings_button { display: flex; width: 100%; justify-content: flex-end; }
+.st-key-model_settings_button button {
+    width: 108px !important; min-width: 108px !important; height: 40px !important;
+    min-height: 40px !important; padding: 0 13px !important;
+    color: var(--od-ink) !important; background: transparent !important;
+    border: 1px solid var(--od-border) !important; border-radius: 5px !important;
+    box-shadow: none !important; font-size: 12px !important;
+}
+.st-key-model_settings_button button:hover {
+    color: var(--od-ink) !important; background: var(--od-surface-2) !important;
+    border-color: var(--od-border-strong) !important; transform: none !important;
 }
 .st-key-theme_toggle { display: flex; width: 100%; justify-content: flex-end; }
 .st-key-theme_toggle button {
@@ -586,6 +611,270 @@ def _llm_available():
     )
 
 
+_TEMPERATURE_OPTIONS = {
+    "自动兼容（推荐）": "auto",
+    "固定 0": "0",
+    "固定 0.2": "0.2",
+    "固定 0.7": "0.7",
+    "固定 1.0": "1",
+    "自定义": "custom",
+}
+
+
+def _initialize_model_settings_state():
+    if st.session_state.get("model_settings_initialized"):
+        return
+    provider_id = detect_provider(
+        os.environ.get("LLM_BASE_URL"), os.environ.get("LLM_PROVIDER")
+    )
+    preset = get_provider_preset(provider_id)
+    base_url = os.environ.get("LLM_BASE_URL") or preset["base_url"]
+    model = os.environ.get("LLM_MODEL") or preset["model"]
+    raw_temperature = os.environ.get("LLM_TEMPERATURE") or preset["temperature"]
+    try:
+        normalized_temperature = normalize_temperature(raw_temperature)
+    except ValueError:
+        normalized_temperature = "auto"
+    matching_label = next(
+        (
+            label for label, value in _TEMPERATURE_OPTIONS.items()
+            if value == normalized_temperature
+        ),
+        "自定义",
+    )
+
+    st.session_state["model_provider_choice"] = provider_id
+    st.session_state["model_saved_provider_id"] = provider_id
+    st.session_state["model_base_url_input"] = base_url
+    st.session_state["model_name_input"] = model
+    st.session_state["model_api_key_input"] = ""
+    st.session_state["model_temperature_choice"] = matching_label
+    st.session_state["model_custom_temperature"] = (
+        normalized_temperature if matching_label == "自定义" else "0.2"
+    )
+    try:
+        max_tokens = int(os.environ.get("LLM_MAX_TOKENS") or preset["max_tokens"])
+    except (TypeError, ValueError):
+        max_tokens = preset["max_tokens"]
+    st.session_state["model_max_tokens_input"] = max(256, max_tokens)
+    st.session_state["model_public_upload_input"] = (
+        os.environ.get("LLM_ALLOW_PUBLIC_IMAGE_UPLOAD", "false").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    st.session_state["model_settings_initialized"] = True
+
+
+def _apply_provider_preset():
+    provider_id = st.session_state.get("model_provider_choice", "custom")
+    preset = get_provider_preset(provider_id)
+    # 不把一个服务商刚输入的密钥带到另一个服务商。
+    st.session_state["model_api_key_input"] = ""
+    if provider_id != "custom":
+        st.session_state["model_base_url_input"] = preset["base_url"]
+        st.session_state["model_name_input"] = preset["model"]
+        st.session_state["model_temperature_choice"] = "自动兼容（推荐）"
+        st.session_state["model_max_tokens_input"] = preset["max_tokens"]
+    st.session_state.pop("model_connection_result", None)
+
+
+def _selected_temperature():
+    selected = _TEMPERATURE_OPTIONS.get(
+        st.session_state.get("model_temperature_choice"), "auto"
+    )
+    if selected == "custom":
+        return normalize_temperature(
+            st.session_state.get("model_custom_temperature", "0.2")
+        )
+    return selected
+
+
+def _model_form_values():
+    existing_api_key = os.environ.get("LLM_API_KEY", "")
+    entered_api_key = st.session_state.get("model_api_key_input", "").strip()
+    same_provider = (
+        st.session_state.get("model_provider_choice")
+        == st.session_state.get("model_saved_provider_id")
+    )
+    api_key = entered_api_key or (existing_api_key if same_provider else "")
+    temperature = _selected_temperature()
+    checked = validate_model_settings(
+        st.session_state.get("model_base_url_input"),
+        api_key,
+        st.session_state.get("model_name_input"),
+        temperature,
+    )
+    return {
+        "provider_id": st.session_state.get("model_provider_choice", "custom"),
+        "base_url": checked["接口地址"],
+        "api_key": checked["API Key"],
+        "model": checked["模型名称"],
+        "temperature": temperature,
+        "max_tokens": int(st.session_state.get("model_max_tokens_input", 8192)),
+        "allow_public_image_upload": bool(
+            st.session_state.get("model_public_upload_input", False)
+        ),
+    }
+
+
+@st.dialog("模型设置", width="large")
+def _model_settings_dialog():
+    _initialize_model_settings_state()
+    provider_labels = {
+        provider_id: preset["label"]
+        for provider_id, preset in PROVIDER_PRESETS.items()
+    }
+    st.selectbox(
+        "模型服务",
+        options=list(PROVIDER_PRESETS),
+        format_func=lambda provider_id: provider_labels[provider_id],
+        key="model_provider_choice",
+        on_change=_apply_provider_preset,
+    )
+    preset = get_provider_preset(st.session_state["model_provider_choice"])
+    st.caption(preset["note"])
+    if preset["docs_url"]:
+        st.markdown(f"[查看该服务的官方配置说明]({preset['docs_url']})")
+
+    st.text_input(
+        "接口地址",
+        key="model_base_url_input",
+        placeholder="https://provider.example/v1",
+    )
+    st.text_input(
+        "API Key",
+        key="model_api_key_input",
+        type="password",
+        placeholder=(
+            "已在本机保存；留空保持不变"
+            if (
+                os.environ.get("LLM_API_KEY")
+                and st.session_state.get("model_provider_choice")
+                == st.session_state.get("model_saved_provider_id")
+            )
+            else "粘贴这个服务的 API Key"
+        ),
+        help="只写入当前工作台目录下的 .env，不会提交到 GitHub。",
+    )
+    st.text_input("模型名称", key="model_name_input")
+
+    with st.expander("高级设置"):
+        st.selectbox(
+            "Temperature",
+            options=list(_TEMPERATURE_OPTIONS),
+            key="model_temperature_choice",
+            help=(
+                "自动兼容会完全省略 temperature，让服务商使用模型默认值。"
+                "Kimi Code、Kimi K3 和部分推理模型应使用此选项。"
+            ),
+        )
+        if _TEMPERATURE_OPTIONS[
+            st.session_state["model_temperature_choice"]
+        ] == "custom":
+            st.text_input(
+                "自定义 Temperature（0–2）",
+                key="model_custom_temperature",
+            )
+        st.number_input(
+            "最大输出 Tokens",
+            min_value=256,
+            max_value=131072,
+            step=1024,
+            key="model_max_tokens_input",
+        )
+        st.checkbox(
+            "接口拒绝内联图片时，允许上传临时公共图床",
+            key="model_public_upload_input",
+            help="敏感文档请保持关闭。默认直接以内联 base64 发送给模型服务。",
+        )
+        preview_temperature = _selected_temperature()
+        st.code(
+            json.dumps(
+                {
+                    "provider": st.session_state["model_provider_choice"],
+                    "base_url": st.session_state["model_base_url_input"],
+                    "model": st.session_state["model_name_input"],
+                    "temperature": preview_temperature,
+                    "api_key": (
+                        "已填写"
+                        if st.session_state.get("model_api_key_input")
+                        else (
+                            "已保存"
+                            if (
+                                os.environ.get("LLM_API_KEY")
+                                and st.session_state.get("model_provider_choice")
+                                == st.session_state.get("model_saved_provider_id")
+                            )
+                            else "未填写"
+                        )
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            language="json",
+        )
+
+    result = st.session_state.get("model_connection_result")
+    if result:
+        (st.success if result["ok"] else st.error)(result["message"])
+
+    test_col, save_col = st.columns(2)
+    if test_col.button(
+        "测试多模态连接",
+        width="stretch",
+        help="会向当前服务发送一张项目示例图，产生一次很小的模型调用。",
+    ):
+        try:
+            values = _model_form_values()
+            client = LLMClient(
+                base_url=values["base_url"],
+                api_key=values["api_key"],
+                model=values["model"],
+                timeout=45,
+                max_retries=0,
+                temperature=temperature_value(values["temperature"]),
+                max_tokens=min(values["max_tokens"], 4096),
+                allow_public_image_upload=values["allow_public_image_upload"],
+            )
+            test_image = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "docs", "images", "workbench-home.png",
+            )
+            client.chat_vision_json(
+                "这是连接测试。请确认你能读取图片，只返回一个 JSON 对象："
+                '{"ok": true, "message": "multimodal ready"}',
+                [test_image],
+            )
+            st.session_state["model_connection_result"] = {
+                "ok": True,
+                "message": "连接成功：模型能够接收图片并返回 JSON。",
+            }
+        except Exception as exc:  # noqa: BLE001
+            st.session_state["model_connection_result"] = {
+                "ok": False,
+                "message": f"连接失败：{exc}",
+            }
+        st.rerun(scope="fragment")
+
+    if save_col.button("保存到本机", type="primary", width="stretch"):
+        try:
+            values = _model_form_values()
+            save_model_settings(**values)
+            load_dotenv(override=True)
+            st.session_state["model_saved_provider_id"] = values["provider_id"]
+            st.session_state["model_api_key_input"] = ""
+            st.session_state["model_connection_result"] = {
+                "ok": True,
+                "message": "设置已保存到本机并立即生效。可以关闭窗口开始排版。",
+            }
+        except Exception as exc:  # noqa: BLE001
+            st.session_state["model_connection_result"] = {
+                "ok": False,
+                "message": f"保存失败：{exc}",
+            }
+        st.rerun(scope="fragment")
+
+
 def _toggle_ui_theme():
     st.session_state["ui_theme"] = (
         "深色" if st.session_state.get("ui_theme", "白色") == "白色" else "白色"
@@ -708,13 +997,22 @@ def _event_markup(events):
 renderer_status = _renderer_status()
 
 with st.container(key="topbar"):
-    brand_col, theme_col = st.columns([1, 0.08], vertical_alignment="center")
+    brand_col, settings_col, theme_col = st.columns(
+        [1, 0.13, 0.08], vertical_alignment="center"
+    )
     brand_col.markdown(
         '<div class="product-lockup"><span class="product-mark">F</span>'
         '<span class="product-name">FORMAT AGENT</span>'
         '<span class="product-caption">文档排版工作台</span></div>',
         unsafe_allow_html=True,
     )
+    with settings_col:
+        open_model_settings = st.button(
+            "模型设置",
+            key="model_settings_button",
+            icon=":material/tune:",
+            type="tertiary",
+        )
     with theme_col:
         next_theme = "深色" if _THEME == "白色" else "白色"
         theme_icon = ":material/dark_mode:" if _THEME == "白色" else ":material/light_mode:"
@@ -725,6 +1023,9 @@ with st.container(key="topbar"):
             type="tertiary",
             on_click=_toggle_ui_theme,
         )
+
+if open_model_settings:
+    _model_settings_dialog()
 
 st.markdown(
     """
@@ -771,8 +1072,9 @@ st.markdown(
 
 if not _llm_available():
     st.warning(
-        "自然语言规范和自动角色识别需要模型配置。你仍可在“高级设置”中上传 "
-        "FormatSpec 与 RoleMap，走完全确定性的排版流程。"
+        "还没有配置模型。可以先载入演示任务；处理自己的文档前，请点击右上角"
+        "“模型设置”。也可以在“高级设置”中上传 FormatSpec 与 RoleMap，使用完全"
+        "确定性的排版流程。"
     )
 if not renderer_status["available"]:
     st.info("没有检测到可用的渲染器（依次尝试 Microsoft Word、WPS、LibreOffice）："
