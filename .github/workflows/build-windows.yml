@@ -1,0 +1,62 @@
+name: Build Windows portable EXE
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime and build dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Run tests
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m pytest tests -q
+
+      - name: Build portable EXE
+        shell: pwsh
+        run: .\packaging\build_windows.ps1
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: format-agent-workbench-windows-portable
+          path: out/format-agent-workbench-windows-portable.zip
+          if-no-files-found: error
+
+      - name: Compute SHA-256
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $Hash = (Get-FileHash -LiteralPath out\format-agent-workbench-windows-portable.zip -Algorithm SHA256).Hash.ToLower()
+          $Hash | Out-File -FilePath out\format-agent-workbench-windows-portable.sha256 -Encoding ascii
+          Write-Host "SHA-256: $Hash"
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/format-agent-workbench-windows-portable.zip
+            out/format-agent-workbench-windows-portable.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

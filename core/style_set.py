@@ -704,6 +704,43 @@ def clear_invalid_numbering_override(paragraph):
     return False
 
 
+def effective_automatic_numbering_override(paragraph):
+    """Copy valid direct/style numbering before replacing the paragraph style.
+
+    When a FormatSpec does not control numbering, changing a paragraph from a
+    numbered source style to a Format Agent style must not silently remove its
+    list label.  Reattaching the effective ``numPr`` as a direct override keeps
+    the original numbering definition while allowing the label to inherit the
+    newly applied paragraph font and size.
+    """
+    from core.extract import paragraph_numbering_metadata
+
+    if paragraph_numbering_metadata(paragraph)["numbering_status"] != "automatic":
+        return None
+    ppr = paragraph._p.pPr
+    direct = ppr.find(qn("w:numPr")) if ppr is not None else None
+    if direct is not None:
+        return deepcopy(direct)
+    style = paragraph.style
+    seen = set()
+    while style is not None and style.style_id not in seen:
+        seen.add(style.style_id)
+        style_ppr = style.element.find(qn("w:pPr"))
+        inherited = style_ppr.find(qn("w:numPr")) if style_ppr is not None else None
+        if inherited is not None:
+            return deepcopy(inherited)
+        style = style.base_style
+    return None
+
+
+def _set_direct_numbering_override(paragraph, num_pr):
+    ppr = paragraph._p.get_or_add_pPr()
+    current = ppr.find(qn("w:numPr"))
+    if current is not None:
+        ppr.remove(current)
+    ppr._insert_numPr(deepcopy(num_pr))
+
+
 _MANUAL_PREFIXES = {
     "heading_1": re.compile(r"^\s*[一二三四五六七八九十百〇零两]+[、.．]\s*"),
     "heading_2": re.compile(r"^\s*[（(][一二三四五六七八九十百〇零两]+[）)]\s*"),
@@ -791,6 +828,7 @@ def _apply_label_prefix(paragraph, rule):
 
 def apply_named_style(
     paragraph, style, rule, role=None, cleanup_mode="controlled",
+    preserved_numbering=None,
 ):
     """绑定命名样式并清除会遮蔽该样式的直接格式，返回受控字段列表。"""
     clear_character_style = role in {
@@ -816,6 +854,8 @@ def apply_named_style(
         paragraph, rule, remove_numbering=remove_numbering,
         cleanup_mode=cleanup_mode)
     paragraph.style = style
+    if preserved_numbering is not None:
+        _set_direct_numbering_override(paragraph, preserved_numbering)
     label_prefix_applied = _apply_label_prefix(paragraph, rule)
     fields = ["paragraph_style"]
     if cleanup_mode != "controlled":
@@ -824,6 +864,8 @@ def apply_named_style(
         fields.append("label_prefix")
     if has_numbering:
         fields.append("automatic_numbering")
+    if preserved_numbering is not None:
+        fields.append("automatic_numbering_preserved")
     if stripped_prefix:
         fields.append("manual_number_prefix_removed")
     if invalid_numbering_removed:

@@ -7,7 +7,9 @@ import os
 import shutil
 from datetime import datetime
 
-HISTORY_ROOT = os.path.join("out", "history")
+from core.runtime import data_path
+
+HISTORY_ROOT = str(data_path("out", "history"))
 
 
 def save_run(out_path, report_path, meta):

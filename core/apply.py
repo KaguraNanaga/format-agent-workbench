@@ -17,10 +17,15 @@ from core.executor import (
 from core.style_set import (
     apply_named_style,
     clear_invalid_numbering_override,
+    effective_automatic_numbering_override,
     ensure_role_styles,
     resolve_target_body_style,
 )
-from core.track_changes import mark_paragraph_revision, snapshot_paragraph
+from core.track_changes import (
+    flatten_style_formatting,
+    mark_paragraph_revision,
+    snapshot_paragraph,
+)
 
 _HF_ALIGN = {"left": 0, "center": 1, "right": 2, "justify": 3}
 _TABLE_ALIGN = {
@@ -645,6 +650,24 @@ def apply_format(docx_path, spec, rolemap, out_path, track=False,
     cleanup_mode = (spec.get("cleanup") or {}).get("mode", "controlled")
     # 必须在创建/更新 FormatAgent 样式之前解析，避免把新样式误认成目标原样式。
     target_body_style = resolve_target_body_style(doc, rolemap)
+    # 同名目标样式可能本身承载自动编号。ensure_role_styles 会重置这些样式，
+    # 因此必须先逐段保存有效编号；模板未控制编号时再转成段落直接覆盖。
+    preserved_numbering = {}
+    for idx, (paragraph, table_depth) in enumerate(iter_main_paragraphs(doc)):
+        if table_depth:
+            continue
+        role = rolemap.get(idx, rolemap.get(str(idx)))
+        if role is None:
+            continue
+        resolved_role = _resolved_role(role, roles)
+        rule = (
+            roles.get(resolved_role, {})
+            if resolved_role is not None else roles.get("body", {})
+        )
+        if not isinstance(rule.get("numbering"), dict):
+            num_pr = effective_automatic_numbering_override(paragraph)
+            if num_pr is not None:
+                preserved_numbering[idx] = num_pr
     role_styles = ensure_role_styles(
         doc, spec, target_body_style=target_body_style)
 
@@ -694,7 +717,8 @@ def apply_format(docx_path, spec, rolemap, out_path, track=False,
             rule = roles[resolved_role]
             style = role_styles[resolved_role]
             changed = apply_named_style(
-                p, style, rule, role=role, cleanup_mode=cleanup_mode)
+                p, style, rule, role=role, cleanup_mode=cleanup_mode,
+                preserved_numbering=preserved_numbering.get(idx))
             fallback_to_target_body = resolved_role != role
         else:
             # 模板未规定的角色与正文保持一致：套用 body 的规则和命名样式，
@@ -703,10 +727,13 @@ def apply_format(docx_path, spec, rolemap, out_path, track=False,
             body_rule = roles.get("body", {})
             body_style = role_styles.get("body", target_body_style)
             changed = apply_named_style(
-                p, body_style, body_rule, role="body", cleanup_mode=cleanup_mode)
+                p, body_style, body_rule, role="body", cleanup_mode=cleanup_mode,
+                preserved_numbering=preserved_numbering.get(idx))
             style = body_style
             fallback_to_target_body = True
         if track:
+            # 修订稿额外把新样式摊平成直接格式（WPS 兼容；干净稿不做）。
+            flatten_style_formatting(p, getattr(style, "_element", None))
             rev_id = mark_paragraph_revision(p, snapshot, rev_id_start=rev_id)
         changelog.append({
             "idx": idx,

@@ -1,0 +1,22 @@
+Format Agent Workbench · Windows 便携版
+
+1. 请先解压整个 ZIP，不要直接在压缩包里运行。
+2. 双击“Format Agent.exe”。无需安装 Python。
+3. 保持启动窗口开启，浏览器会自动打开工作台。
+4. 首次体验可开启“载入演示任务”，演示无需 API Key。
+5. 处理自己的文档时，在右上角“模型设置”中填写多模态模型与 API Key。
+6. 关闭启动窗口即可停止工作台。
+
+模型设置保存在本目录的 .env，排版历史保存在 out\history。
+若 Windows SmartScreen 提示“未知发布者”，这是因为当前便携版尚未进行商业代码签名；
+请只从项目官方 GitHub Releases 下载，并可核对 Release 中公布的 SHA-256。
+
+Project: https://github.com/KaguraNanaga/format-agent-workbench
+
+---
+
+Format Agent Workbench · Windows portable edition
+
+Extract the entire ZIP, then double-click “Format Agent.exe”. Python is not
+required. Keep the console window open while using the workbench; close it to
+stop the app. The built-in demo does not require an API Key.

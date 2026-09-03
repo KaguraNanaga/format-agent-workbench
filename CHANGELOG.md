@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 — 2026-09-03
+
+### 中文
+
+- 新增无需安装 Python 的 64 位 Windows 便携 EXE，解压后双击即可打开 Streamlit 工作台。
+- 将只读资源与用户数据分离：内置示例随程序打包，API Key 与历史结果保存在 EXE 所在目录。
+- Office/WPS 转换、PDF 渲染和 Word 域刷新改用同一 EXE 的隔离工作进程，并保留超时与进程清理边界。
+- 修复模板未规定编号时，目标文档原有的有效标题/正文自动编号被样式重置删除的问题；保留后的编号继续继承新样式的字体字号。
+- 修复修订模式 DOCX 在 WPS 中“接受所有修订”后字体回退为默认字体的问题：修订稿在保留命名样式的同时，把新格式显式写入段落与文字的直接格式（与 Word 原生录制的格式修订一致），干净稿不受影响。
+- 原子保存增加 Windows 短暂文件占用重试，降低安全软件扫描 DOCX 或 `.env` 时造成的偶发保存失败。
+- 增加 PyInstaller 可复现构建脚本及 GitHub Actions Windows 构建流程。
+- 便携包附带中英文快速说明，并在启动窗口显示中英文状态与访问地址。
+
+### English
+
+- Added a self-contained 64-bit Windows portable EXE that opens the Streamlit workbench without requiring Python.
+- Separated bundled read-only resources from user data: built-in samples stay inside the package, while API Keys and history remain beside the EXE.
+- Routed Office/WPS conversion, PDF rendering, and Word field refresh through isolated worker modes in the same EXE while preserving timeout and process-cleanup boundaries.
+- Fixed valid heading/body numbering being removed when the template did not specify numbering; preserved labels continue to inherit the newly applied style font and size.
+- Fixed tracked-changes DOCX reverting to the default font after "Accept All Revisions" in WPS Office: the tracked document now also writes the new formatting as explicit direct formatting (matching Word's native tracked-format pattern); the clean output is unchanged.
+- Added bounded retries around atomic saves to tolerate brief Windows file locks caused by security scanning of DOCX or `.env` files.
+- Added a reproducible PyInstaller build script and a GitHub Actions Windows build workflow.
+- Added bilingual quick-start instructions and bilingual startup status output to the portable package.
+
 ## 0.2.2 — 2026-09-03
 
 ### 中文

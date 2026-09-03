@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from core.runtime import worker_command
+
 
 SAFE_FIELD_KINDS = {
     "PAGE", "NUMPAGES", "SECTION", "SECTIONPAGES", "DATE", "TIME",
@@ -155,12 +157,12 @@ def refresh_fields_word(docx_path):
     absolute_path = str(Path(docx_path).expanduser().resolve())
     process_names = ("winword.exe",)
     before = _office_pids(process_names)
-    command = [sys.executable, str(Path(__file__).resolve()), "--worker", absolute_path]
+    command = worker_command("field-refresh", absolute_path)
     timeout = _com_timeout_seconds()
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout,
+            command, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
             check=False, creationflags=creationflags,
         )
     except subprocess.TimeoutExpired as exc:

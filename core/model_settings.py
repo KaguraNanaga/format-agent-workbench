@@ -7,9 +7,10 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
+from core.runtime import settings_path
+from core.safe_output import replace_with_retry
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_ENV_PATH = PROJECT_ROOT / ".env"
+DEFAULT_ENV_PATH = settings_path()
 
 
 PROVIDER_PRESETS = {
@@ -269,7 +270,7 @@ def save_model_settings(
     try:
         with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
             stream.write("\n".join(rendered).rstrip() + "\n")
-        os.replace(temporary_name, target)
+        replace_with_retry(temporary_name, target)
     finally:
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)

@@ -19,10 +19,10 @@ import time
 import requests
 
 from core.model_settings import validate_api_key
+from core.runtime import settings_path
 
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DEFAULT_ENV_PATH = os.path.join(_PROJECT_ROOT, ".env")
+_DEFAULT_ENV_PATH = str(settings_path())
 _USE_ENV = object()
 
 

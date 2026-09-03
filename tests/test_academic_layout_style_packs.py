@@ -19,6 +19,7 @@ from core.agent import Agent
 from core.apply import apply_format
 from core.preflight import preflight_docx, scan_docx
 from core.rules_from_template import extract_rules_from_template
+from core.safe_output import replace_with_retry
 from core.schema import validate_spec
 from core.style_packs import get_style_pack, list_style_packs
 from core.text_integrity import check_text_integrity
@@ -141,7 +142,7 @@ def _add_footnotes_part(path):
     with zipfile.ZipFile(rewritten, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in payloads.items():
             archive.writestr(name, data)
-    os.replace(rewritten, path)
+    replace_with_retry(rewritten, path)
 
 
 def test_field_inventory_and_broken_cross_reference_detection(tmp_path):

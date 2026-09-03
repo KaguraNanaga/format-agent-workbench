@@ -19,6 +19,8 @@ from pathlib import Path
 
 from lxml import etree
 
+from core.runtime import worker_command
+
 
 class RenderQualityError(RuntimeError):
     """渲染成功生成文件，但页面内容明显不可用。"""
@@ -296,16 +298,13 @@ def _docx_to_pdf_com_candidate(docx_path, pdf_path, prog_id, display_name):
     destination = Path(pdf_path).expanduser().resolve()
     process_names = _office_process_names(prog_id)
     before = _office_pids(process_names)
-    worker = Path(__file__).with_name("com_pdf_worker.py")
-    command = [
-        sys.executable, str(worker), str(source), str(destination),
-        prog_id, display_name,
-    ]
+    command = worker_command(
+        "com-pdf", source, destination, prog_id, display_name)
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     timeout = _com_timeout_seconds()
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout,
+            command, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
             check=False, creationflags=creationflags,
         )
     except subprocess.TimeoutExpired as exc:

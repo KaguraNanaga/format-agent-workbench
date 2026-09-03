@@ -30,6 +30,7 @@ from core.model_settings import (
     validate_model_settings,
 )
 from core.render import renderer_status as _renderer_status
+from core.runtime import resource_path
 from core.schema import validate_spec
 
 
@@ -844,10 +845,8 @@ def _model_settings_dialog():
                 max_tokens=min(values["max_tokens"], 4096),
                 allow_public_image_upload=values["allow_public_image_upload"],
             )
-            test_image = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "docs", "images", "workbench-home.png",
-            )
+            test_image = str(resource_path(
+                "docs", "images", "workbench-home.png"))
             client.chat_vision_json(
                 "这是连接测试。请确认你能读取图片，只返回一个 JSON 对象："
                 '{"ok": true, "message": "multimodal ready"}',
@@ -1109,7 +1108,7 @@ with left:
         if use_demo:
             spec_mode = "文字说明"
             template_file = None
-            with open("assets/spec.txt", encoding="utf-8") as handle:
+            with open(resource_path("assets", "spec.txt"), encoding="utf-8") as handle:
                 spec_text = handle.read()
             st.text_area("已加载的示例规范", value=spec_text, height=190, disabled=True)
             st.success("示例格式要求已准备好")
@@ -1322,7 +1321,10 @@ if run and can_run:
         log_box.markdown(_event_markup(events), unsafe_allow_html=True)
 
     target_suffix = ".docx" if use_demo else os.path.splitext(target_file.name)[1].lower()
-    target_path = "assets/messy.docx" if use_demo else _save_upload(target_file, target_suffix)
+    target_path = (
+        str(resource_path("assets", "messy.docx"))
+        if use_demo else _save_upload(target_file, target_suffix)
+    )
     out_dir = tempfile.mkdtemp(prefix="format-agent-")
     out_path = os.path.join(out_dir, "formatted.docx")
     report_path = os.path.join(out_dir, "report.md")
@@ -1339,7 +1341,7 @@ if run and can_run:
             validate_spec(kwargs["spec"])
         elif use_demo:
             # 一键示例使用项目内置标准答案，保证演示稳定且不产生外部模型调用。
-            with open("assets/spec_std.json", encoding="utf-8") as handle:
+            with open(resource_path("assets", "spec_std.json"), encoding="utf-8") as handle:
                 kwargs["spec"] = json.load(handle)
         elif spec_mode == "参考模板":
             kwargs["template_path"] = _save_upload(template_file, ".docx")
@@ -1354,7 +1356,7 @@ if run and can_run:
                 ).items()
             }
         elif use_demo:
-            with open("assets/rolemap_std.json", encoding="utf-8") as handle:
+            with open(resource_path("assets", "rolemap_std.json"), encoding="utf-8") as handle:
                 kwargs["rolemap"] = {
                     int(key): value for key, value in json.load(handle).items()
                 }

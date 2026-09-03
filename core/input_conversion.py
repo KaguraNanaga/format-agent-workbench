@@ -14,6 +14,8 @@ import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from core.runtime import worker_command
+
 
 SUPPORTED_INPUT_EXTENSIONS = {".docx", ".doc", ".wps", ".odt", ".rtf"}
 UNSUPPORTED_INPUT_EXTENSIONS = {".pdf"}
@@ -148,16 +150,13 @@ def _terminate_new_office_processes(process_names, before):
 def _convert_with_com_candidate(source, destination, prog_id, display_name):
     process_names = _office_process_names(prog_id)
     before = _office_pids(process_names)
-    worker = Path(__file__).with_name("com_conversion_worker.py")
-    command = [
-        sys.executable, str(worker), str(source), str(destination),
-        prog_id, display_name,
-    ]
+    command = worker_command(
+        "com-conversion", source, destination, prog_id, display_name)
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     timeout = _com_timeout_seconds()
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout,
+            command, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
             check=False, creationflags=creationflags,
         )
     except subprocess.TimeoutExpired as exc:

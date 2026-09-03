@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import time
 import weakref
 
 
@@ -57,10 +58,22 @@ def allocate_temp_sibling(final_path):
     return temp_path
 
 
+def replace_with_retry(source, destination, attempts=10):
+    """Atomically replace a file, tolerating brief Windows scanner locks."""
+    for attempt in range(attempts):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == attempts - 1:
+                raise
+            time.sleep(min(0.25, 0.05 * (attempt + 1)))
+
+
 def commit_atomic(pairs):
     """逐个原子替换；调用方应把主 DOCX 放最后，使它成为完成标志。"""
     for temp_path, final_path in pairs:
-        os.replace(temp_path, final_path)
+        replace_with_retry(temp_path, final_path)
 
 
 class AtomicOutputSet:
@@ -100,6 +113,6 @@ def write_json_atomic(path, value):
     try:
         with open(temp_path, "w", encoding="utf-8") as handle:
             json.dump(value, handle, ensure_ascii=False, indent=2)
-        os.replace(temp_path, path)
+        replace_with_retry(temp_path, path)
     finally:
         cleanup_temps([temp_path])
