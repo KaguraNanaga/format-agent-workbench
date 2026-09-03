@@ -50,13 +50,24 @@ jobs:
           $Hash | Out-File -FilePath out\format-agent-workbench-windows-portable.sha256 -Encoding ascii
           Write-Host "SHA-256: $Hash"
 
+      - name: Extract release notes from CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $Version = ${env:GITHUB_REF_NAME} -replace '^v', ''
+          $Changelog = Get-Content -LiteralPath CHANGELOG.md -Raw -Encoding UTF8
+          $Match = [regex]::Match($Changelog, "(?ms)^## $Version\b.*?(?=\r?\n## |\z)")
+          if (-not $Match.Success) { throw "CHANGELOG.md 中没有 $Version 的条目" }
+          $Match.Value.Trim() | Out-File -FilePath out\release-notes.md -Encoding utf8
+
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: Format Agent Workbench ${{ github.ref_name }}
+          body_path: out/release-notes.md
           files: |
             out/format-agent-workbench-windows-portable.zip
             out/format-agent-workbench-windows-portable.sha256
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
