@@ -152,6 +152,32 @@ def temperature_value(value):
     return None if normalized == "auto" else float(normalized)
 
 
+def validate_api_key(value):
+    """Return a bearer-token-safe API Key without ever logging its contents."""
+    key = str(value or "").strip()
+    if not key:
+        raise ValueError("请填写 API Key")
+    lowered = key.lower()
+    has_bearer_prefix = (
+        lowered.startswith("bearer")
+        and len(key) > len("bearer")
+        and key[len("bearer")].isspace()
+    )
+    has_assignment_prefix = lowered.startswith(
+        ("api_key=", "apikey=", "llm_api_key=")
+    )
+    has_wrapping_quote = key[0] in "\"'“”‘’" or key[-1] in "\"'“”‘’"
+    has_unsafe_character = any(ord(character) < 33 or ord(character) > 126
+                               for character in key)
+    if (has_bearer_prefix or has_assignment_prefix or has_wrapping_quote
+            or has_unsafe_character):
+        raise ValueError(
+            "API Key 只能粘贴控制台生成的原始英文令牌；请不要包含中文说明、"
+            "空格、引号、Bearer 或 API_KEY= 前缀。"
+        )
+    return key
+
+
 def validate_model_settings(base_url, api_key, model, temperature="auto"):
     values = {
         "接口地址": str(base_url or "").strip(),
@@ -161,6 +187,7 @@ def validate_model_settings(base_url, api_key, model, temperature="auto"):
     missing = [label for label, value in values.items() if not value]
     if missing:
         raise ValueError("请填写" + "、".join(missing))
+    values["API Key"] = validate_api_key(values["API Key"])
     for label, value in values.items():
         if "\n" in value or "\r" in value:
             raise ValueError(f"{label}不能包含换行")

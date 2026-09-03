@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.2 — 2026-09-03
+
+### 中文
+
+- 保存或测试模型配置时校验 API Key，拒绝包含中文说明、空格、引号、`Bearer` 或 `API_KEY=` 前缀的内容。
+- 手动编辑 `.env` 后即使留下了无效 Key，LLM 客户端也会在发送请求前给出明确提示。
+- API Key 格式错误不再进入三次网络重试，也不会继续显示难以理解的 `latin-1` 编码异常。
+
+### English
+
+- Validate API Keys when saving or testing model settings, rejecting values that include explanatory text, whitespace, quotes, a `Bearer` prefix, or an `API_KEY=` prefix.
+- Invalid Keys left by manual `.env` edits are now reported clearly by the LLM client before any request is sent.
+- API Key format errors no longer enter three network retries or surface as an opaque `latin-1` encoding exception.
+
 ## 0.2.1 — 2026-09-03
 
 ### 中文

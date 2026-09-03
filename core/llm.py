@@ -18,6 +18,8 @@ import time
 
 import requests
 
+from core.model_settings import validate_api_key
+
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_ENV_PATH = os.path.join(_PROJECT_ROOT, ".env")
@@ -157,6 +159,11 @@ class LLMClient:
         self.base_url = (base_url or os.environ.get("LLM_BASE_URL") or "").rstrip("/")
         self.api_key = api_key or os.environ.get("LLM_API_KEY") or ""
         self.model = model or os.environ.get("LLM_MODEL") or ""
+        if self.api_key:
+            try:
+                self.api_key = validate_api_key(self.api_key)
+            except ValueError as exc:
+                raise LLMError(str(exc)) from exc
         self.timeout = timeout if timeout is not None else int(
             os.environ.get("LLM_TIMEOUT", "120"))
         # Kimi、OpenAI 推理模型等可能拒绝显式 temperature。auto/空值表示不发送。

@@ -16,6 +16,7 @@ from core.model_settings import (
     save_model_settings,
     schedule_api_key_clear,
     temperature_value,
+    validate_api_key,
 )
 
 
@@ -44,6 +45,43 @@ def test_api_key_clear_is_deferred_until_the_next_render():
     assert state["model_api_key_input"] == ""
     assert "model_api_key_clear_pending" not in state
     assert consume_scheduled_api_key_clear(state) is False
+
+
+def test_api_key_accepts_plain_ascii_token():
+    assert validate_api_key("  sk-test_ABC.123-xyz  ") == "sk-test_ABC.123-xyz"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "请填写这里 sk-test-token",
+        "sk-test token",
+        "Bearer sk-test-token",
+        '"sk-test-token"',
+        "API_KEY=sk-test-token",
+    ],
+)
+def test_api_key_rejects_descriptions_and_wrappers(value):
+    with pytest.raises(ValueError, match="原始英文令牌"):
+        validate_api_key(value)
+
+
+def test_llm_rejects_non_ascii_api_key_before_sending(monkeypatch):
+    called = False
+
+    def fake_post(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return _Response()
+
+    monkeypatch.setattr("core.llm.requests.post", fake_post)
+    with pytest.raises(LLMError, match="原始英文令牌"):
+        LLMClient(
+            base_url="https://example.test/v1",
+            api_key="中文说明 sk-not-a-real-key",
+            model="vision-model",
+        )
+    assert called is False
 
 
 def test_common_multimodal_presets_default_to_automatic_temperature():

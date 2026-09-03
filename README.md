@@ -118,7 +118,7 @@ python -m pip install pytest
 pytest tests/ -q
 ```
 
-当前公开版本：`0.2.1`。发布前在 Windows 环境通过自动化测试。
+当前公开版本：`0.2.2`。发布前在 Windows 环境通过自动化测试。
 
 发现安全问题时，请不要公开提交包含真实文档、API Key 或个人信息的 Issue，处理方式见 [SECURITY.md](SECURITY.md)。
 

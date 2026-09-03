@@ -758,7 +758,10 @@ def _model_settings_dialog():
             )
             else "粘贴这个服务的 API Key"
         ),
-        help="只写入当前工作台目录下的 .env，不会提交到 GitHub。",
+        help=(
+            "只粘贴控制台生成的原始 Key，不要附带中文说明、引号、Bearer 或 "
+            "API_KEY=。Key 只写入当前工作台目录下的 .env，不会提交到 GitHub。"
+        ),
     )
     st.text_input("模型名称", key="model_name_input")
 
