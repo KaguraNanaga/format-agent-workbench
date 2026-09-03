@@ -20,10 +20,12 @@ from core.llm import load_dotenv
 from core.llm import LLMClient
 from core.model_settings import (
     PROVIDER_PRESETS,
+    consume_scheduled_api_key_clear,
     detect_provider,
     get_provider_preset,
     normalize_temperature,
     save_model_settings,
+    schedule_api_key_clear,
     temperature_value,
     validate_model_settings,
 )
@@ -719,6 +721,9 @@ def _model_form_values():
 @st.dialog("模型设置", width="large")
 def _model_settings_dialog():
     _initialize_model_settings_state()
+    # Streamlit 不允许在输入框实例化后修改同名 session_state。保存成功时只设置
+    # 待清理标记，并在下一次 dialog fragment 重绘、输入框创建之前清空密钥字段。
+    consume_scheduled_api_key_clear(st.session_state)
     provider_labels = {
         provider_id: preset["label"]
         for provider_id, preset in PROVIDER_PRESETS.items()
@@ -862,7 +867,7 @@ def _model_settings_dialog():
             save_model_settings(**values)
             load_dotenv(override=True)
             st.session_state["model_saved_provider_id"] = values["provider_id"]
-            st.session_state["model_api_key_input"] = ""
+            schedule_api_key_clear(st.session_state)
             st.session_state["model_connection_result"] = {
                 "ok": True,
                 "message": "设置已保存到本机并立即生效。可以关闭窗口开始排版。",

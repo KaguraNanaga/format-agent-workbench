@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.1 — 2026-09-03
+
+### 中文
+
+- 修复保存模型设置后，Streamlit 因在输入框创建后清空 API Key 状态而报错的问题。
+- 保存成功后仍会清空界面中的 API Key，但改为在下一次安全重绘开始前执行。
+- 从本版本起，新版本的变更日志与 GitHub Release Notes 同时提供中文和英文。
+
+### English
+
+- Fixed a Streamlit session-state error raised after saving model settings and clearing the API Key field.
+- The API Key is still cleared from the visible form after a successful save, now before the next safe dialog render.
+- Starting with this version, new changelog entries and GitHub Release Notes are provided in both Chinese and English.
+
 ## 0.2.0 — 2026-09-03
 
 - 在工作台内新增模型设置窗口，无需手动创建或编辑 `.env`。

@@ -10,9 +10,11 @@ from core.llm import LLMClient, LLMError
 from core.model_settings import (
     MANAGED_KEYS,
     PROVIDER_PRESETS,
+    consume_scheduled_api_key_clear,
     normalize_temperature,
     read_env_values,
     save_model_settings,
+    schedule_api_key_clear,
     temperature_value,
 )
 
@@ -29,6 +31,19 @@ class _Response:
 
     def json(self):
         return self._payload
+
+
+def test_api_key_clear_is_deferred_until_the_next_render():
+    state = {"model_api_key_input": "secret-being-edited"}
+
+    schedule_api_key_clear(state)
+    assert state["model_api_key_input"] == "secret-being-edited"
+    assert state["model_api_key_clear_pending"] is True
+
+    assert consume_scheduled_api_key_clear(state) is True
+    assert state["model_api_key_input"] == ""
+    assert "model_api_key_clear_pending" not in state
+    assert consume_scheduled_api_key_clear(state) is False
 
 
 def test_common_multimodal_presets_default_to_automatic_temperature():

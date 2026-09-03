@@ -101,6 +101,22 @@ MANAGED_KEYS = (
     "LLM_ALLOW_PUBLIC_IMAGE_UPLOAD",
 )
 
+API_KEY_CLEAR_PENDING = "model_api_key_clear_pending"
+API_KEY_WIDGET_KEY = "model_api_key_input"
+
+
+def schedule_api_key_clear(state):
+    """Queue clearing without mutating an already-instantiated Streamlit widget."""
+    state[API_KEY_CLEAR_PENDING] = True
+
+
+def consume_scheduled_api_key_clear(state):
+    """Clear the API Key before the next widget render, if a clear was queued."""
+    if not state.pop(API_KEY_CLEAR_PENDING, False):
+        return False
+    state[API_KEY_WIDGET_KEY] = ""
+    return True
+
 
 def get_provider_preset(provider_id):
     return PROVIDER_PRESETS.get(provider_id) or PROVIDER_PRESETS["custom"]
@@ -234,4 +250,3 @@ def save_model_settings(
     for key, value in values.items():
         os.environ[key] = value
     return target
-
