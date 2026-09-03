@@ -1,0 +1,28 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Workbench runtime
+.workbench/
+output/
+out/
+*.log
+*_verify_render/
+*_report.md
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+~$*
